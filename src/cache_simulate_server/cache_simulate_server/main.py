@@ -26,8 +26,20 @@ def job():
             slices[key] = {
                 'cache_key': key,
                 'cache_value': val,
-                'count' : 1
+                'count' : 1,
+                'memory_hit': 0,
+                'redis_hit':0,
+                'database_hit': 0
             }
+        
+        # 統計命中來源
+        if process_log['source_type'] == 'database':
+            slices[key]['database_hit'] += 1
+        elif process_log['source_type'] == 'redis':
+            slices[key]['redis_hit'] += 1
+        elif process_log['source_type'] == 'memory':
+            slices[key]['memory_hit'] += 1
+            
 
     for k, v in slices.items():
         # 找到時間輪
@@ -39,7 +51,13 @@ def job():
         timewheel['cache_value'] = v['cache_value']
 
         # 收集資訊 產生時間片
-        timewheel['timeslices'].append({'datetime': dt, 'count': v['count']})
+        timewheel['timeslices'].append(
+            {
+            'datetime':    dt, 
+            'count':        v['count'],
+            'database_hit': v['database_hit'],
+            'redis_hit':    v['redis_hit'],
+            'memory_hit':   v['memory_hit']})
         
         # 將資料更新到時間輪中
         db.timewheel.find_one_and_replace({'cache_key':k}, timewheel)
@@ -78,7 +96,9 @@ def job2():
     sort_timewheels = sorted(sort_timewheels, key=lambda x: x['total'], reverse=True)
     
     post_data = []
-    for sort_timewheel in sort_timewheels[:5]:
+
+    hitkey = int(len(sort_timewheels)/3) if len(sort_timewheels) > 15 else 5
+    for sort_timewheel in sort_timewheels[:hitkey]:
         post_data.append({'cache_key': sort_timewheel['cache_key'], 'cache_value': sort_timewheel['cache_value']})
 
     # 投放熱點資訊
@@ -87,8 +107,31 @@ def job2():
 
     print("投放熱點")
 
+def job3():
+    dt = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+
+    # 統計時間輪的命中數
+    timewheels = db.timewheel.find()
+    hits = {
+        'datatime': dt,
+        'memory_hit': 0,
+        'redis_hit':0,
+        'database_hit': 0
+    }
+
+    for timewheel in timewheels:
+        slices = timewheel['timeslices']
+        if len(slices) < 10:
+            continue
+        hits['memory_hit'] += sum(c['memory_hit'] for c in slices)
+        hits['redis_hit'] += sum(c['redis_hit'] for c in slices)
+        hits['database_hit'] += sum(c['database_hit'] for c in slices)
+
+    db.statistics.insert_one(hits)
+
 schedule.every(10).seconds.do(job)
 schedule.every().minutes.do(job2)
+schedule.every(5).minutes.do(job3)
 
 while 1:
     schedule.run_pending()
