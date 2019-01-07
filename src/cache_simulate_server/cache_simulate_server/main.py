@@ -32,12 +32,12 @@ def job():
     for k, v in slices.items():
         # 找到時間輪
         timewheel = db.timewheel.find_one({'cache_key':k})
-        timewheel['cache_value'] = v['cache_value']
-
         if not timewheel:
             timewheel = {'cache_key': k, 'cache_value':v['cache_value'], 'timeslices': []}
             db.timewheel.insert_one(timewheel)
     
+        timewheel['cache_value'] = v['cache_value']
+
         # 收集資訊 產生時間片
         timewheel['timeslices'].append({'datetime': dt, 'count': v['count']})
         
