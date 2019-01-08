@@ -46,7 +46,7 @@ class Source(object):
             self.source_type = "database"
             # 取資料後 寫入redis內
             redis_store.set(self.cache_key, self.cache_key)
-            redis_store.expire(self.cache_key, 60)
+            redis_store.expire(self.cache_key, 300)
         
         return val
 

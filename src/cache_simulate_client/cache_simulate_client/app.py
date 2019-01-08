@@ -9,7 +9,7 @@ def create_app():
     app = Flask(__name__)
     app.config.update(
         REDIS_URL= "redis://@localhost:6379/0",
-        MONGO_URI= "mongodb://root:1qaz2wsx@127.0.0.1:27017/admin"
+        MONGO_URI= "mongodb://root:1qaz2wsx@127.0.0.1:27017/cachesimulate"
     )
 
     register_extensions(app)

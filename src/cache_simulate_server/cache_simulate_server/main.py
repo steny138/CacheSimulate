@@ -4,8 +4,8 @@ import datetime
 import requests
 from pymongo import MongoClient
 
-client = MongoClient('mongodb://root:1qaz2wsx@127.0.0.1:27017/admin')
-db = client.admin
+client = MongoClient('mongodb://root:1qaz2wsx@127.0.0.1:27017/cachesimulate')
+db = client.cachesimulate
 
 def job():
     dt = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
@@ -40,7 +40,7 @@ def job():
         elif process_log['source_type'] == 'memory':
             slices[key]['memory_hit'] += 1
             
-
+    timewheels = []
     for k, v in slices.items():
         # 找到時間輪
         timewheel = db.timewheel.find_one({'cache_key':k})
@@ -61,12 +61,16 @@ def job():
         
         # 將資料更新到時間輪中
         db.timewheel.find_one_and_replace({'cache_key':k}, timewheel)
+
+        timewheels.append(timewheel)
     
     print("將資料節轉到時間片中")
 
-def job2():
+    job2(timewheels)
+
+def job2(timewheels):
     # 結轉時間輪的資料
-    timewheels = db.timewheel.find()
+    # timewheels = db.timewheel.find()
 
     temp = []
     for timewheel in timewheels:
@@ -80,8 +84,10 @@ def job2():
         timewheel['total'] = total
 
         slices.sort(key=lambda x: datetime.datetime.strptime(x['datetime'], "%Y/%m/%d %H:%M:%S"), reverse=True)
+        if len(slices) > 10: 
+            slices.pop()
 
-        timewheel['timeslices'] = slices[:10]
+        timewheel['timeslices'] = slices
 
         # 將資料更新到時間輪中
         db.timewheel.find_one_and_replace({'_id':timewheel['_id']}, timewheel)
@@ -128,9 +134,11 @@ def job3():
         hits['database_hit'] += sum(c['database_hit'] for c in slices)
 
     db.statistics.insert_one(hits)
+    
+    print("統計命中數字")
 
 schedule.every(10).seconds.do(job)
-schedule.every().minutes.do(job2)
+# schedule.every().minutes.do(job2)
 schedule.every(5).minutes.do(job3)
 
 while 1:
